@@ -10,7 +10,10 @@ CORS(app, resources={r"/*": {"origins": "https://trindasbox.vercel.app"}})
 def home():
     return jsonify({"message": "API Flask funcionando na Vercel!"})
 
-
+@app.route("/vendas", methods=["GET"])
+def listar_vendas():
+    vendas = consultarVendas()
+    return jsonify(vendas)
 
 # USUÁRIOS
 @app.route("/novousuario", methods=["POST"])
@@ -41,9 +44,12 @@ def adicionar_valor_usuario():
 
 @app.route("/venderproduto", methods=["POST"])
 def vender_produto():
-    data = request.get_json()
-    mensagem = venderArtigoReligioso(data)
-    return jsonify({"message": mensagem})
+    try:
+        data = request.get_json()
+        mensagem = venderArtigoReligioso(data)
+        return jsonify({"message": mensagem}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 
@@ -51,9 +57,12 @@ def vender_produto():
 ''
 @app.route("/venderalimento", methods=["POST"])
 def vender_alimento():
-    data = request.get_json()
-    mensagem = venderAlimento(data)
-    return jsonify({"message": mensagem})
+    try:
+        data = request.get_json()
+        mensagem = venderAlimento(data)
+        return jsonify({"message": mensagem}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/produto/<id>", methods=["GET"])
 def rota_buscar_produto(id):
@@ -95,6 +104,12 @@ def rota_listar_alimentos():
 def adicionarProduto():
     data = request.get_json()
     mensagem = cadastrarProduto(data)
+    return jsonify({"message": mensagem})
+
+@app.route("/novoalimento", methods=["POST"])
+def adicionarAlimento():
+    data = request.get_json()
+    mensagem = cadastrarAlimento(data)
     return jsonify({"message": mensagem})
 
 

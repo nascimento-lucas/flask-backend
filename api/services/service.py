@@ -98,62 +98,69 @@ def listarUsuariosEmDivida():
 # === ARTIGOS RELIGIOSOS ===
 
 def venderArtigoReligioso(data):
+    artigo_resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}&select=*",
+        headers=HEADERS
+    )
+    artigo_json = artigo_resp.json()
+    artigo = artigo_json[0] if artigo_json else None
+
+    if not artigo:
+        raise Exception("Artigo não encontrado.")
+    if artigo["quantidade"] < int(data["quantidade"]):
+        raise Exception("Estoque insuficiente.")
+
+    usuario = consultarUsuarioPorNumeroCracha(data["numeroCracha"])
+    if not usuario:
+        raise Exception("Usuário não encontrado.")
+
+    total = float(artigo["valor"]) * int(data["quantidade"])
+
+    # Atualiza estoque
+    requests.patch(
+        f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}",
+        headers=HEADERS,
+        json={"quantidade": artigo["quantidade"] - int(data["quantidade"])}
+    )
+
+    # Atualiza saldo
+    novo_saldo = usuario["valor"] - total
+    requests.patch(
+        f"{SUPABASE_URL}/rest/v1/usuarios?numero_cracha=eq.{data['numeroCracha']}",
+        headers=HEADERS,
+        json={"valor": novo_saldo}
+    )
+
+    # Registra venda com informações adicionais
+    requests.post(
+        f"{SUPABASE_URL}/rest/v1/vendas",
+        headers=HEADERS,
+        json={
+            "tipo": "produto",
+            "id_artigo": data["id"],
+            "numero_cracha": data["numeroCracha"],
+            "nome_usuario": usuario["nome"],
+            "nome_produto": artigo["nome"],
+            "valor": total
+        }
+    )
+
+    return "Venda realizada com sucesso!"
+
+def consultarVendas():
     try:
-        artigo_resp = requests.get(
-            f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}&select=*",
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/vendas?select=*",
             headers=HEADERS
         )
-        artigo_json = artigo_resp.json()
-        artigo = artigo_json[0] if artigo_json else None
-
-        if not artigo:
-            raise Exception("Artigo não encontrado.")
-        if artigo["quantidade"] < int(data["quantidade"]):
-            raise Exception("Estoque insuficiente.")
-
-        usuario = consultarUsuarioPorNumeroCracha(data["numeroCracha"])
-        if not usuario:
-            raise Exception("Usuário não encontrado.")
-
-        total = float(artigo["valor"]) * int(data["quantidade"])
-
-        # Atualiza estoque
-        requests.patch(
-            f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}",
-            headers=HEADERS,
-            json={"quantidade": artigo["quantidade"] - int(data["quantidade"])}
-        )
-
-        # Atualiza saldo
-        novo_saldo = usuario["valor"] - total
-        requests.patch(
-            f"{SUPABASE_URL}/rest/v1/usuarios?numero_cracha=eq.{data['numeroCracha']}",
-            headers=HEADERS,
-            json={"valor": novo_saldo}
-        )
-
-        # Registra a venda
-        requests.post(
-            f"{SUPABASE_URL}/rest/v1/vendas",
-            headers=HEADERS,
-            json={
-                "id_artigo": data["id"],
-                "numero_cracha": data["numeroCracha"],
-                "valor": total
-            }
-        )
-
-        return "Venda realizada com sucesso!"
+        return response.json()
     except Exception as e:
-        # Propaga a exceção para ser tratada pela rota
-        raise e
-
+        return f"Erro: {str(e)}"
 
 # === ALIMENTOS ===
 
 def venderAlimento(data):
     try:
-        # Consulta o alimento pelo nome
         alimento_resp = requests.get(
             f"{SUPABASE_URL}/rest/v1/alimentos?id=eq.{data['id']}&select=*",
             headers=HEADERS
@@ -166,14 +173,11 @@ def venderAlimento(data):
         if alimento["quantidade"] < int(data["quantidade"]):
             raise Exception("Estoque de alimento insuficiente.")
 
-        # Consulta o usuário
         usuario = consultarUsuarioPorNumeroCracha(data["numeroCracha"])
         if not usuario:
             raise Exception("Usuário não encontrado.")
 
         total = float(alimento["valor"]) * int(data["quantidade"])
-        if usuario["valor"] < total:
-            raise Exception("Saldo insuficiente.")
 
         # Atualiza estoque
         requests.patch(
@@ -182,7 +186,7 @@ def venderAlimento(data):
             json={"quantidade": alimento["quantidade"] - int(data["quantidade"])}
         )
 
-        # Atualiza saldo do usuário
+        # Atualiza saldo
         novo_saldo = usuario["valor"] - total
         requests.patch(
             f"{SUPABASE_URL}/rest/v1/usuarios?numero_cracha=eq.{data['numeroCracha']}",
@@ -190,13 +194,16 @@ def venderAlimento(data):
             json={"valor": novo_saldo}
         )
 
-        # Registra a venda
+        # Registra venda com informações adicionais
         requests.post(
             f"{SUPABASE_URL}/rest/v1/vendas",
             headers=HEADERS,
             json={
-                "id_artigo": data["id"],  # você pode querer mudar para `id_alimento` se quiser mais clareza
+                "tipo": "alimento",
+                "id_artigo": data["id"],  # ou id_alimento, se quiser separar no Supabase
                 "numero_cracha": data["numeroCracha"],
+                "nome_usuario": usuario["nome"],
+                "nome_produto": alimento["nome"],
                 "valor": total
             }
         )
@@ -291,6 +298,47 @@ def cadastrarProduto(data):
 
 
 
+def cadastrarAlimento(data):
+    try:
+        # Consulta o alimento pelo ID
+        response_get = requests.get(
+            f"{SUPABASE_URL}/rest/v1/alimentos?id=eq.{data['id']}&select=*",
+            headers=HEADERS
+        )
+        alimento = response_get.json()[0] if response_get.json() else None
 
+        payload = {
+            "nome": data["nome"],
+            "id": data["id"],
+            "quantidade": int(data["quantidade"]),
+            "valor": float(data["valor"]),
+        }
 
-    
+        if alimento:
+            # Atualiza alimento
+            response = requests.patch(
+                f"{SUPABASE_URL}/rest/v1/alimentos?id=eq.{data['id']}",
+                headers=HEADERS,
+                json=payload
+            )
+            if response.status_code == 204:
+                return "Alimento atualizado com sucesso!"
+        else:
+            # Cria novo alimento
+            payload["id"] = data["id"]
+            response = requests.post(
+                f"{SUPABASE_URL}/rest/v1/alimentos",
+                headers=HEADERS,
+                json=payload
+            )
+            if response.status_code in (200, 201):
+                return "Alimento cadastrado com sucesso!"
+
+        return f"Erro: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"Erro ao cadastrar alimento: {str(e)}"
+
+        
+        
+        
+        
