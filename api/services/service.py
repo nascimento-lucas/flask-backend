@@ -249,6 +249,45 @@ def listarAlimentos():
     except Exception as e:
         return f"Erro ao listar alimentos: {str(e)}"
     
+def cadastrarProduto(data):
+    try:
+        # Consulta o artigo pelo ID
+        response_get = requests.get(
+            f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}&select=*",
+            headers=HEADERS
+        )
+        artigo = response_get.json()[0] if response_get.json() else None
+
+        payload = {
+            "nome": data["nome"],
+            "descricao": data["descricao"],
+            "quantidade": int(data["quantidade"]),
+            "valor": float(data["valor"]),
+        }
+
+        if artigo:
+            # Atualiza artigo
+            response = requests.patch(
+                f"{SUPABASE_URL}/rest/v1/artigos_religiosos?id=eq.{data['id']}",
+                headers=HEADERS,
+                json=payload
+            )
+            if response.status_code == 204:
+                return "Produto atualizado com sucesso!"
+        else:
+            # Cria novo artigo
+            payload["id"] = data["id"]
+            response = requests.post(
+                f"{SUPABASE_URL}/rest/v1/artigos_religiosos",
+                headers=HEADERS,
+                json=payload
+            )
+            if response.status_code in (200, 201):
+                return "Produto cadastrado com sucesso!"
+
+        return f"Erro: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"Erro ao cadastrar produto: {str(e)}"
 
 
 

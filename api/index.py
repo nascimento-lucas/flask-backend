@@ -91,3 +91,12 @@ def rota_listar_alimentos():
         return jsonify(resultado)
     return jsonify({"erro": resultado}), 500
 
+@app.route("/novoproduto", methods=["POST"])
+def adicionarProduto():
+    data = request.get_json()
+    mensagem = cadastrarProduto(data)
+    return jsonify({"message": mensagem})
+
+
+
+
